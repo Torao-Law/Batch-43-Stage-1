@@ -165,9 +165,10 @@ function getDistanceTime(time){
     }
 }
 
-setInterval(function() {
+setInterval(() => {
   showData()
 }, 1000)
+
 
 
 // let posted = "2022-12-23 10:28:00"
@@ -182,4 +183,28 @@ setInterval(function() {
 // // 1 menit = 60
 // // 1 detik = 1000
 
+// function getDistanceTime(time) {
+//   let timePosting = time
+//   let timeNow = new Date()
 
+//   let distance = timeNow - timePosting
+
+//   let daysDistance = Math.floor(distance / (24 * 60 * 60 * 1000))
+//     if (daysDistance != 0) {
+//         return daysDistance + ' Days Ago'
+//     } else {
+//         let hoursDistance = Math.floor(distance / (60 * 60 * 1000))
+//         if (hoursDistance != 0) {
+//             return hoursDistance + ' Hours Ago'
+//         } else {
+//             let minuteDistance = Math.floor(distance / (60 * 1000))
+//             if (minuteDistance != 0) {
+//                 return minuteDistance + ' Minutes Ago'
+//             } else {
+//                 let secondDistance = Math.floor(distance / 1000)
+//                 if (secondDistance != 0)
+//                     return secondDistance + ' sec'
+//             }
+//         }
+//     }
+// }
