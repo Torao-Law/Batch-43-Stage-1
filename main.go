@@ -11,32 +11,32 @@ import (
 )
 
 var Data = map[string]interface{}{
-	"Title": "Personal Web",
+	"Title":   "Personal Web",
+	"IsLogin": true,
 }
 
 func main() {
 	route := mux.NewRouter()
 
-	// static folder
-	route.PathPrefix("/public/").Handler(http.StripPrefix("/public/", http.FileServer(http.Dir("./public/"))))
+	route.PathPrefix("/public/").Handler(http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
 
-	// routing
 	route.HandleFunc("/", helloWorld).Methods("GET")
 	route.HandleFunc("/home", home).Methods("GET").Name("home")
 	route.HandleFunc("/blog", blogs).Methods("GET")
 	route.HandleFunc("/blog/{id}", blogDetail).Methods("GET")
 	route.HandleFunc("/add-blog", formBlog).Methods("GET")
 	route.HandleFunc("/blog", addBlog).Methods("POST")
-	route.HandleFunc("/contact-me", contactMe).Methods("GET")
+	route.HandleFunc("/contact", contactMe).Methods("GET")
 
-	fmt.Println("Server running on port 5000")
+	// port := 5000
+	fmt.Println("Server is running on port 5000")
 	http.ListenAndServe("localhost:5000", route)
 }
 
 func helloWorld(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Hello World!"))
+	w.Write([]byte("Hello world!"))
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
