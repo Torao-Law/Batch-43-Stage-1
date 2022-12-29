@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -13,6 +14,31 @@ import (
 var Data = map[string]interface{}{
 	"Title":   "Personal Web",
 	"IsLogin": true,
+}
+
+// Array of objects
+// nama = []string{"Abel", "Dandi", "Ilham", "Jody"}
+
+// This is interface
+// type persegi interface {
+// 	panjang() float64
+// 	lebar() float64
+// }
+
+type Blog struct {
+	Title     string
+	Post_date string
+	Author    string
+	Content   string
+}
+
+var Blogs = []Blog{
+	{
+		Title:     "Pasar Coding di Indonesia Dinilai Masih Menjanjikan",
+		Post_date: "12 Jul 2021 | 22:30 WIB",
+		Author:    "Abel Dustin",
+		Content:   "Test",
+	},
 }
 
 func main() {
@@ -26,6 +52,7 @@ func main() {
 	route.HandleFunc("/blog/{id}", blogDetail).Methods("GET")
 	route.HandleFunc("/add-blog", formBlog).Methods("GET")
 	route.HandleFunc("/blog", addBlog).Methods("POST")
+	route.HandleFunc("/delete-blog/{id}", deleteBlog).Methods("GET")
 	route.HandleFunc("/contact", contactMe).Methods("GET")
 
 	// port := 5000
@@ -63,8 +90,13 @@ func blogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	respData := map[string]interface{}{
+		"Data":  Data,
+		"Blogs": Blogs,
+	}
+
 	w.WriteHeader(http.StatusOK)
-	tmpl.Execute(w, Data)
+	tmpl.Execute(w, respData)
 }
 
 func blogDetail(w http.ResponseWriter, r *http.Request) {
@@ -108,8 +140,35 @@ func addBlog(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Title : " + r.PostForm.Get("title"))
-	fmt.Println("Content : " + r.PostForm.Get("content"))
+	// fmt.Println("Title : " + r.PostForm.Get("title"))
+	// fmt.Println("Content : " + r.PostForm.Get("content"))
+
+	title := r.PostForm.Get("title")
+	content := r.PostForm.Get("content")
+
+	//code here
+	var newBlog = Blog{
+		Title:     title,
+		Post_date: time.Now().String(),
+		Author:    "Abel Dustin",
+		Content:   content,
+	}
+
+	Blogs = append(Blogs, newBlog)
+
+	fmt.Println(Blogs)
+
+	http.Redirect(w, r, "/blog", http.StatusMovedPermanently)
+}
+
+func deleteBlog(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	id, _ := strconv.Atoi(mux.Vars(r)["id"])
+
+	fmt.Println(id)
+
+	Blogs = append(Blogs[:id], Blogs[id+1:]...)
 
 	http.Redirect(w, r, "/blog", http.StatusMovedPermanently)
 }
