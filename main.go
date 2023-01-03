@@ -136,9 +136,25 @@ func blogDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// code here
+	BlogDetail := Blog{}
+
+	//kongteks nya apa cuy?
+	err = connection.Conn.QueryRow(context.Background(), "SELECT id, title, images, content, post_at FROM tb_blog WHERE id=$1", id).Scan(
+		&BlogDetail.Id, &BlogDetail.Title, &BlogDetail.Image, &BlogDetail.Content, &BlogDetail.Post_date,
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("message : " + err.Error()))
+		return
+	}
+
+	BlogDetail.Author = "Abel Dustin"
+	BlogDetail.Format_date = BlogDetail.Post_date.Format("2 January 2006")
+
 	resp := map[string]interface{}{
 		"Data": Data,
-		"Id":   id,
+		"Blog": BlogDetail,
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -165,22 +181,27 @@ func addBlog(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	// fmt.Println("Title : " + r.PostForm.Get("title"))
-	// fmt.Println("Content : " + r.PostForm.Get("content"))
-
 	title := r.PostForm.Get("title")
 	content := r.PostForm.Get("content")
 
-	//code here
-	var newBlog = Blog{
-		Title:   title,
-		Author:  "Abel Dustin",
-		Content: content,
+	// code here
+	_, err = connection.Conn.Exec(context.Background(), "INSERT INTO tb_blog(title, content, images) VALUES ($1, $2, 'images.png')", title, content)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("message : " + err.Error()))
+		return
 	}
 
-	Blogs = append(Blogs, newBlog)
+	//code here
+	// var newBlog = Blog{
+	// 	Title:   title,
+	// 	Author:  "Abel Dustin",
+	// 	Content: content,
+	// }
 
-	fmt.Println(Blogs)
+	// Blogs = append(Blogs, newBlog)
+
+	// fmt.Println(Blogs)
 
 	http.Redirect(w, r, "/blog", http.StatusMovedPermanently)
 }
@@ -190,9 +211,17 @@ func deleteBlog(w http.ResponseWriter, r *http.Request) {
 
 	id, _ := strconv.Atoi(mux.Vars(r)["id"])
 
-	fmt.Println(id)
+	// code here
+	_, err := connection.Conn.Exec(context.Background(), "DELETE FROM tb_blog WHERE id=$1", id)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("message : " + err.Error()))
+		return
+	}
 
-	Blogs = append(Blogs[:id], Blogs[id+1:]...)
+	// fmt.Println(id)
+
+	// Blogs = append(Blogs[:id], Blogs[id+1:]...)
 
 	http.Redirect(w, r, "/blog", http.StatusMovedPermanently)
 }
