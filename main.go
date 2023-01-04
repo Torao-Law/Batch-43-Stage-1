@@ -8,24 +8,24 @@ import (
 	"net/http"
 	"personal-web/connection"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+	"golang.org/x/crypto/bcrypt"
 )
 
-var Data = map[string]interface{}{
-	"Title":   "Personal Web",
-	"IsLogin": true,
+type MetaData struct {
+	Title     string
+	IsLogin   bool
+	UserName  string
+	FlashData string
 }
 
-// Array of objects
-// nama = []string{"Abel", "Dandi", "Ilham", "Jody"}
-
-// This is interface
-// type persegi interface {
-// 	panjang() float64
-// 	lebar() float64
-// }
+var Data = MetaData{
+	Title: "Personal Web",
+}
 
 type Blog struct {
 	Id          int
@@ -35,16 +35,17 @@ type Blog struct {
 	Author      string
 	Content     string
 	Image       string
+	IsLogin     bool
 }
 
-var Blogs = []Blog{
-	// {
-	// 	Title:     "Pasar Coding di Indonesia Dinilai Masih Menjanjikan",
-	// 	Post_date: "12 Jul 2021 | 22:30 WIB",
-	// 	Author:    "Abel Dustin",
-	// 	Content:   "Test",
-	// },
+type User struct {
+	Id       int
+	Name     string
+	Email    string
+	Password string
 }
+
+var Blogs = []Blog{}
 
 func main() {
 	route := mux.NewRouter()
@@ -61,6 +62,14 @@ func main() {
 	route.HandleFunc("/blog", addBlog).Methods("POST")
 	route.HandleFunc("/delete-blog/{id}", deleteBlog).Methods("GET")
 	route.HandleFunc("/contact", contactMe).Methods("GET")
+
+	route.HandleFunc("/register", formRegister).Methods("GET")
+	route.HandleFunc("/register", register).Methods("POST")
+
+	route.HandleFunc("/login", formLogin).Methods("GET")
+	route.HandleFunc("/login", login).Methods("POST")
+
+	route.HandleFunc("/logout", logout).Methods("GET")
 
 	// port := 5000
 	fmt.Println("Server is running on port 5000")
@@ -83,6 +92,28 @@ func home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var store = sessions.NewCookieStore([]byte("SESSION_ID"))
+	session, _ := store.Get(r, "SESSION_ID")
+
+	if session.Values["IsLogin"] != true {
+		Data.IsLogin = false
+	} else {
+		Data.IsLogin = session.Values["IsLogin"].(bool)
+		Data.UserName = session.Values["Name"].(string)
+	}
+
+	fm := session.Flashes("message")
+
+	var flashes []string
+	if len(fm) > 0 {
+		session.Save(r, w)
+
+		for _, fl := range fm {
+			flashes = append(flashes, fl.(string))
+		}
+	}
+	Data.FlashData = strings.Join(flashes, "")
+
 	w.WriteHeader(http.StatusOK)
 	tmpl.Execute(w, Data)
 }
@@ -95,6 +126,16 @@ func blogs(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("message : " + err.Error()))
 		return
+	}
+
+	var store = sessions.NewCookieStore([]byte("SESSION_ID"))
+	session, _ := store.Get(r, "SESSION_ID")
+
+	if session.Values["IsLogin"] != true {
+		Data.IsLogin = false
+	} else {
+		Data.IsLogin = session.Values["IsLogin"].(bool)
+		Data.UserName = session.Values["Name"].(string)
 	}
 
 	rows, _ := connection.Conn.Query(context.Background(), "SELECT id, title, images, content, post_at FROM tb_blog")
@@ -111,6 +152,12 @@ func blogs(w http.ResponseWriter, r *http.Request) {
 
 		each.Author = "Abel Dustin"
 		each.Format_date = each.Post_date.Format("2 January 2006")
+
+		if session.Values["IsLogin"] != true {
+			each.IsLogin = false
+		} else {
+			each.IsLogin = session.Values["IsLogin"].(bool)
+		}
 
 		result = append(result, each)
 	}
@@ -182,7 +229,7 @@ func addBlog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := r.PostForm.Get("title")
-	content := r.PostForm.Get("content")
+	content := r.PostForm.Get("contentcontext.Background(), ")
 
 	// code here
 	_, err = connection.Conn.Exec(context.Background(), "INSERT INTO tb_blog(title, content, images) VALUES ($1, $2, 'images.png')", title, content)
@@ -227,7 +274,7 @@ func deleteBlog(w http.ResponseWriter, r *http.Request) {
 }
 
 func contactMe(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=ansi")
 
 	var tmpl, err = template.ParseFiles("views/contact.html")
 	if err != nil {
@@ -236,6 +283,139 @@ func contactMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var store = sessions.NewCookieStore([]byte("SESSION_ID"))
+	session, _ := store.Get(r, "SESSION_ID")
+
+	if session.Values["IsLogin"] != true {
+		Data.IsLogin = false
+	} else {
+		Data.IsLogin = session.Values["IsLogin"].(bool)
+		Data.UserName = session.Values["Name"].(string)
+	}
+
 	w.WriteHeader(http.StatusOK)
 	tmpl.Execute(w, Data)
+}
+
+func formRegister(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	var tmpl, err = template.ParseFiles("views/register.html")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("message : " + err.Error()))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	tmpl.Execute(w, Data)
+}
+
+func register(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	name := r.PostForm.Get("name")
+	email := r.PostForm.Get("email")
+	password := r.PostForm.Get("password")
+
+	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(password), 10)
+
+	_, err = connection.Conn.Exec(context.Background(), "INSERT INTO tb_user(name, email, password) VALUES ($1, $2, $3)", name, email, passwordHash)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("message : " + err.Error()))
+		return
+	}
+
+	var store = sessions.NewCookieStore([]byte("SESSION_ID"))
+	session, _ := store.Get(r, "SESSION_ID")
+
+	session.AddFlash("Successfully register!", "message")
+
+	session.Save(r, w)
+
+	http.Redirect(w, r, "/login", http.StatusMovedPermanently)
+}
+
+func formLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	var tmpl, err = template.ParseFiles("views/login.html")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("message : " + err.Error()))
+		return
+	}
+
+	// cookie = storing data
+	var store = sessions.NewCookieStore([]byte("SESSION_ID"))
+	session, _ := store.Get(r, "SESSION_ID")
+
+	fm := session.Flashes("message")
+
+	var flashes []string
+	if len(fm) > 0 {
+		session.Save(r, w)
+		for _, fl := range fm {
+			flashes = append(flashes, fl.(string))
+		}
+	}
+
+	Data.FlashData = strings.Join(flashes, "")
+
+	w.WriteHeader(http.StatusOK)
+	tmpl.Execute(w, Data)
+}
+
+func login(w http.ResponseWriter, r *http.Request) {
+	var store = sessions.NewCookieStore([]byte("SESSION_ID"))
+	session, _ := store.Get(r, "SESSION_ID")
+
+	err := r.ParseForm()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	email := r.PostForm.Get("email")
+	password := r.PostForm.Get("password")
+
+	user := User{}
+
+	err = connection.Conn.QueryRow(context.Background(), "SELECT * FROM tb_user WHERE email=$1", email).Scan(
+		&user.Id, &user.Name, &user.Email, &user.Password,
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("message : " + err.Error()))
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("message : " + err.Error()))
+		return
+	}
+
+	session.Values["IsLogin"] = true
+	session.Values["Name"] = user.Name
+	session.Options.MaxAge = 10800 // 1 jam = 3600 detik | 3 jam = 10800
+
+	session.AddFlash("successfully login!", "message")
+	session.Save(r, w)
+
+	http.Redirect(w, r, "/home", http.StatusMovedPermanently)
+}
+
+func logout(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("logout.")
+	var store = sessions.NewCookieStore([]byte("SESSION_ID"))
+	session, _ := store.Get(r, "SESSION_ID")
+	session.Options.MaxAge = -1 // gak boleh kurang dari 0
+	session.Save(r, w)
+
+	http.Redirect(w, r, "/home", http.StatusSeeOther)
 }
