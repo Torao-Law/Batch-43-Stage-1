@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"personal-web/connection"
+	"personal-web/middleware"
 	"strconv"
 	"strings"
 	"time"
@@ -53,13 +54,14 @@ func main() {
 	connection.DatabaseConnection()
 
 	route.PathPrefix("/public/").Handler(http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
+	route.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
 
 	route.HandleFunc("/", helloWorld).Methods("GET")
 	route.HandleFunc("/home", home).Methods("GET").Name("home")
 	route.HandleFunc("/blog", blogs).Methods("GET")
 	route.HandleFunc("/blog/{id}", blogDetail).Methods("GET")
 	route.HandleFunc("/add-blog", formBlog).Methods("GET")
-	route.HandleFunc("/blog", addBlog).Methods("POST")
+	route.HandleFunc("/blog", middleware.UploadFile(addBlog)).Methods("POST")
 	route.HandleFunc("/delete-blog/{id}", deleteBlog).Methods("GET")
 	route.HandleFunc("/contact", contactMe).Methods("GET")
 
@@ -138,19 +140,19 @@ func blogs(w http.ResponseWriter, r *http.Request) {
 		Data.UserName = session.Values["Name"].(string)
 	}
 
-	rows, _ := connection.Conn.Query(context.Background(), "SELECT id, title, images, content, post_at FROM tb_blog")
+	rows, _ := connection.Conn.Query(context.Background(), "SELECT tb_blog.id, title, images, content, post_at, tb_user.name as author FROM tb_blog LEFT JOIN tb_user ON tb_user.id = tb_blog.author_id ORDER BY id DESC")
 
 	var result []Blog
 	for rows.Next() {
 		var each = Blog{}
 
-		var err = rows.Scan(&each.Id, &each.Title, &each.Image, &each.Content, &each.Post_date)
+		var err = rows.Scan(&each.Id, &each.Title, &each.Image, &each.Content, &each.Post_date, &each.Author)
 		if err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
-		each.Author = "Abel Dustin"
+		// each.Author = "Abel Dustin"
 		each.Format_date = each.Post_date.Format("2 January 2006")
 
 		if session.Values["IsLogin"] != true {
@@ -187,8 +189,8 @@ func blogDetail(w http.ResponseWriter, r *http.Request) {
 	BlogDetail := Blog{}
 
 	//kongteks nya apa cuy?
-	err = connection.Conn.QueryRow(context.Background(), "SELECT id, title, images, content, post_at FROM tb_blog WHERE id=$1", id).Scan(
-		&BlogDetail.Id, &BlogDetail.Title, &BlogDetail.Image, &BlogDetail.Content, &BlogDetail.Post_date,
+	err = connection.Conn.QueryRow(context.Background(), "SELECT tb_blog.id, title, images, content, post_at, tb_user.name as author FROM tb_blog LEFT JOIN tb_user ON tb_user.id = tb_blog.author_id WHERE tb_blog.id=$1", id).Scan(
+		&BlogDetail.Id, &BlogDetail.Title, &BlogDetail.Image, &BlogDetail.Content, &BlogDetail.Post_date, &BlogDetail.Author,
 	)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -196,7 +198,7 @@ func blogDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	BlogDetail.Author = "Abel Dustin"
+	// BlogDetail.Author = "Abel Dustin"
 	BlogDetail.Format_date = BlogDetail.Post_date.Format("2 January 2006")
 
 	resp := map[string]interface{}{
@@ -229,10 +231,19 @@ func addBlog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := r.PostForm.Get("title")
-	content := r.PostForm.Get("contentcontext.Background(), ")
+	content := r.PostForm.Get("content")
+
+	var store = sessions.NewCookieStore([]byte("SESSION_ID"))
+	session, _ := store.Get(r, "SESSION_ID")
+
+	dataContext := r.Context().Value("dataFile")
+	image := dataContext.(string)
+
+	author := session.Values["Id"].(int)
+	fmt.Println(author)
 
 	// code here
-	_, err = connection.Conn.Exec(context.Background(), "INSERT INTO tb_blog(title, content, images) VALUES ($1, $2, 'images.png')", title, content)
+	_, err = connection.Conn.Exec(context.Background(), "INSERT INTO tb_blog(title, content, images, author_id) VALUES ($1, $2, $3, $4)", title, content, image, author)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("message : " + err.Error()))
@@ -402,6 +413,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	session.Values["IsLogin"] = true
 	session.Values["Name"] = user.Name
+	session.Values["Id"] = user.Id
 	session.Options.MaxAge = 10800 // 1 jam = 3600 detik | 3 jam = 10800
 
 	session.AddFlash("successfully login!", "message")
